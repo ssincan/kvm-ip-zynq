@@ -60,7 +60,7 @@ architecture rtl of quantizer is
   signal round_s       : STD_LOGIC;
   signal di_d1         : std_logic_vector(SIZE_C-1 downto 0);
   
-  signal pipeline_reg  : STD_LOGIC_VECTOR(4 downto 0);
+  signal pipeline_reg  : STD_LOGIC_VECTOR(6 downto 0);
   signal sign_bit_pipe : std_logic_vector(SIZE_C+INTERN_PIPE_C+1-1 downto 0);  
   signal do_rdiv       : STD_LOGIC_VECTOR(SIZE_C-1 downto 0);
   signal table_select  : std_logic;

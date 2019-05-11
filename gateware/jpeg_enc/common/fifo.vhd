@@ -21,23 +21,20 @@ end RAMF;
 architecture RTL of RAMF is
   type mem_type is array ((2**RAMA_W)-1 downto 0) of 
                               STD_LOGIC_VECTOR(RAMD_W-1 downto 0);
-  signal mem                    : mem_type;
-  signal read_addr              : STD_LOGIC_VECTOR(RAMA_W-1 downto 0);
+  signal mem              : mem_type;
   
 begin       
-  
-  -------------------------------------------------------------------------------
-  q_sg:
-  -------------------------------------------------------------------------------
-  q <= mem(TO_INTEGER(UNSIGNED(read_addr)));    
-  
+
   -------------------------------------------------------------------------------
   read_proc: -- register read address
   -------------------------------------------------------------------------------
   process (clk)
   begin 
     if clk = '1' and clk'event then        
-      read_addr <= raddr;
+      q <= mem(TO_INTEGER(UNSIGNED(raddr)));
+      if (we = '1') and (waddr=raddr)  then
+        q <= d;
+      end if;
     end if;  
   end process;
   

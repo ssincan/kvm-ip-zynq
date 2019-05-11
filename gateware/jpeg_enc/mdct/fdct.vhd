@@ -175,6 +175,8 @@ architecture RTL of FDCT is
   signal fram1_line_cnt    : unsigned(2 downto 0);
   signal fram1_pix_cnt     : unsigned(2 downto 0);
   
+  signal img_size_x_m16 : unsigned(img_size_x'range);
+  signal img_size_y_m8  : unsigned(img_size_y'range);
   
 -------------------------------------------------------------------------------
 -- Architecture: begin
@@ -258,8 +260,12 @@ begin
       fram1_raddr     <= (others => '0');
       fram1_line_cnt  <= (others => '0');
       fram1_pix_cnt   <= (others => '0');
+      img_size_x_m16  <= (others => '0');
+      img_size_y_m8   <= (others => '0');
     elsif CLK'event and CLK = '1' then
-      rd_en_d1 <= rd_en;
+      img_size_x_m16 <= unsigned(img_size_x)-16;
+      img_size_y_m8  <= unsigned(img_size_y)-8;
+      rd_en_d1       <= rd_en;
       cur_cmp_idx_d1 <= cur_cmp_idx;
       cur_cmp_idx_d2 <= cur_cmp_idx_d1;
       cur_cmp_idx_d3 <= cur_cmp_idx_d2;
@@ -289,10 +295,10 @@ begin
         if cmp_idx = 4-1 then
           cmp_idx <= (others => '0');
           -- horizontal block counter
-          if x_pixel_cnt = unsigned(img_size_x)-16 then
+          if x_pixel_cnt = img_size_x_m16 then
             x_pixel_cnt <= (others => '0');
             -- vertical block counter
-            if y_line_cnt = unsigned(img_size_y)-8 then
+            if y_line_cnt = img_size_y_m8 then
               y_line_cnt <= (others => '0');
               -- set end of image flag
               eoi_fdct <= '1';    
@@ -552,49 +558,50 @@ begin
   -------------------------------------------------------------------
   -- RGB to YCbCr conversion
   -------------------------------------------------------------------
-  p_rgb2ycbcr : process(CLK, RST)
+  p_rgb2ycbcr : process(CLK)
   begin
-    if RST = '1' then
-      Y_Reg_1  <= (others => '0');
-      Y_Reg_2  <= (others => '0');
-      Y_Reg_3  <= (others => '0');
-      Cb_Reg_1 <= (others => '0');
-      Cb_Reg_2 <= (others => '0');
-      Cb_Reg_3 <= (others => '0');
-      Cr_Reg_1 <= (others => '0');
-      Cr_Reg_2 <= (others => '0');
-      Cr_Reg_3 <= (others => '0');
-      Y_Reg    <= (others => '0');
-      Cb_Reg   <= (others => '0');
-      Cr_Reg   <= (others => '0');
-    elsif CLK'event and CLK = '1' then
+    if CLK'event and CLK = '1' then
       -- RGB input
       if C_YUV_INPUT = '0' then
-        Y_Reg_1  <= R_s*C_Y_1;
-        Y_Reg_2  <= G_s*C_Y_2;
-        Y_Reg_3  <= B_s*C_Y_3;
-        
+        Y_Reg_1 <= R_s*C_Y_1;
+        Y_Reg_2 <= G_s*C_Y_2;
+        Y_Reg_3 <= B_s*C_Y_3;
+
         Cb_Reg_1 <= R_s*C_Cb_1;
         Cb_Reg_2 <= G_s*C_Cb_2;
         Cb_Reg_3 <= B_s*C_Cb_3;
-        
+
         Cr_Reg_1 <= R_s*C_Cr_1;
         Cr_Reg_2 <= G_s*C_Cr_2;
         Cr_Reg_3 <= B_s*C_Cr_3;
-        
+
         Y_Reg  <= Y_Reg_1 + Y_Reg_2 + Y_Reg_3;
-        Cb_Reg <= Cb_Reg_1 + Cb_Reg_2 + Cb_Reg_3 + to_signed(128*16384,Cb_Reg'length);
-        Cr_Reg <= Cr_Reg_1 + Cr_Reg_2 + Cr_Reg_3 + to_signed(128*16384,Cr_Reg'length);
+        Cb_Reg <= Cb_Reg_1 + Cb_Reg_2 + Cb_Reg_3 + to_signed(128*16384, Cb_Reg'length);
+        Cr_Reg <= Cr_Reg_1 + Cr_Reg_2 + Cr_Reg_3 + to_signed(128*16384, Cr_Reg'length);
       -- YCbCr input
       -- R-G-B misused as Y-Cb-Cr
       else
         Y_Reg_1  <= '0' & R_s & "00000000000000";
         Cb_Reg_1 <= '0' & G_s & "00000000000000";
         Cr_Reg_1 <= '0' & B_s & "00000000000000";
-        
-        Y_Reg  <= Y_Reg_1; 
+
+        Y_Reg  <= Y_Reg_1;
         Cb_Reg <= Cb_Reg_1;
         Cr_Reg <= Cr_Reg_1;
+      end if;
+      if RST = '1' then
+        Y_Reg_1  <= (others => '0');
+        Y_Reg_2  <= (others => '0');
+        Y_Reg_3  <= (others => '0');
+        Cb_Reg_1 <= (others => '0');
+        Cb_Reg_2 <= (others => '0');
+        Cb_Reg_3 <= (others => '0');
+        Cr_Reg_1 <= (others => '0');
+        Cr_Reg_2 <= (others => '0');
+        Cr_Reg_3 <= (others => '0');
+        Y_Reg    <= (others => '0');
+        Cb_Reg   <= (others => '0');
+        Cr_Reg   <= (others => '0');
       end if;
     end if;
   end process;

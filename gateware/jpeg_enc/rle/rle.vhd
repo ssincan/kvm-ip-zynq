@@ -64,6 +64,7 @@ architecture rtl of rle is
   signal prev_dc_reg_2   : SIGNED(RAMDATA_W-1 downto 0);
   signal prev_dc_reg_3   : SIGNED(RAMDATA_W-1 downto 0);
   signal acc_reg         : SIGNED(RAMDATA_W downto 0);
+  signal acc_reg_abs     : SIGNED(RAMDATA_W downto 0);
   signal size_reg        : UNSIGNED(SIZE_REG_C-1 downto 0); 
   signal ampli_vli_reg   : SIGNED(RAMDATA_W downto 0);
   signal runlength_reg   : UNSIGNED(3 downto 0);   
@@ -91,23 +92,7 @@ begin
   -------------------------------------------
   process(clk,rst)
   begin
-    if rst = '1' then
-      wr_cnt_d1       <= (others => '0');
-      prev_dc_reg_0   <= (others => '0');
-      prev_dc_reg_1   <= (others => '0');
-      prev_dc_reg_2   <= (others => '0');
-      prev_dc_reg_3   <= (others => '0');
-      dovalid_reg     <= '0';
-      acc_reg         <= (others => '0');
-      runlength_reg   <= (others => '0');
-      runlength       <= (others => '0');
-      dovalid         <= '0';
-      zero_cnt        <= (others => '0');
-      zrl_proc        <= '0';
-      rd_en           <= '0';
-      rd_cnt          <= (others => '0');
-      divalid_en      <= '0';
-    elsif clk = '1' and clk'event then
+    if clk = '1' and clk'event then
       dovalid_reg     <= '0';
       runlength_reg   <= (others => '0');
       wr_cnt_d1       <= wr_cnt;
@@ -235,8 +220,26 @@ begin
       end if;
 
     end if;
+    if rst = '1' then
+      wr_cnt_d1       <= (others => '0');
+      prev_dc_reg_0   <= (others => '0');
+      prev_dc_reg_1   <= (others => '0');
+      prev_dc_reg_2   <= (others => '0');
+      prev_dc_reg_3   <= (others => '0');
+      dovalid_reg     <= '0';
+      acc_reg         <= (others => '0');
+      runlength_reg   <= (others => '0');
+      runlength       <= (others => '0');
+      dovalid         <= '0';
+      zero_cnt        <= (others => '0');
+      zrl_proc        <= '0';
+      rd_en           <= '0';
+      divalid_en      <= '0';
+    end if;
   end process;   
   
+  acc_reg_abs <= abs(acc_reg);
+
   -------------------------------------------------------------------
   -- Entropy Coder
   -------------------------------------------------------------------
@@ -255,60 +258,14 @@ begin
       end if;
       
       -- compute Symbol-1 Size
-      if acc_reg = TO_SIGNED(-1,RAMDATA_W+1) then
-        size_reg <= TO_UNSIGNED(1,SIZE_REG_C);
-      elsif (acc_reg < TO_SIGNED(-1,RAMDATA_W+1) and acc_reg > TO_SIGNED(-4,RAMDATA_W+1)) then
-        size_reg <= TO_UNSIGNED(2,SIZE_REG_C);
-      elsif (acc_reg < TO_SIGNED(-3,RAMDATA_W+1) and acc_reg > TO_SIGNED(-8,RAMDATA_W+1)) then
-        size_reg <= TO_UNSIGNED(3,SIZE_REG_C);
-      elsif (acc_reg < TO_SIGNED(-7,RAMDATA_W+1) and acc_reg > TO_SIGNED(-16,RAMDATA_W+1)) then
-        size_reg <= TO_UNSIGNED(4,SIZE_REG_C); 
-      elsif (acc_reg < TO_SIGNED(-15,RAMDATA_W+1) and acc_reg > TO_SIGNED(-32,RAMDATA_W+1)) then
-        size_reg <= TO_UNSIGNED(5,SIZE_REG_C);  
-      elsif (acc_reg < TO_SIGNED(-31,RAMDATA_W+1) and acc_reg > TO_SIGNED(-64,RAMDATA_W+1)) then
-        size_reg <= TO_UNSIGNED(6,SIZE_REG_C);
-      elsif (acc_reg < TO_SIGNED(-63,RAMDATA_W+1) and acc_reg > TO_SIGNED(-128,RAMDATA_W+1)) then
-        size_reg <= TO_UNSIGNED(7,SIZE_REG_C); 
-      elsif (acc_reg < TO_SIGNED(-127,RAMDATA_W+1) and acc_reg > TO_SIGNED(-256,RAMDATA_W+1)) then
-        size_reg <= TO_UNSIGNED(8,SIZE_REG_C); 
-      elsif (acc_reg < TO_SIGNED(-255,RAMDATA_W+1) and acc_reg > TO_SIGNED(-512,RAMDATA_W+1)) then
-        size_reg <= TO_UNSIGNED(9,SIZE_REG_C);  
-      elsif (acc_reg < TO_SIGNED(-511,RAMDATA_W+1) and acc_reg > TO_SIGNED(-1024,RAMDATA_W+1)) then
-        size_reg <= TO_UNSIGNED(10,SIZE_REG_C);  
-      elsif (acc_reg < TO_SIGNED(-1023,RAMDATA_W+1) and acc_reg > TO_SIGNED(-2048,RAMDATA_W+1)) then
-        size_reg <= TO_UNSIGNED(11,SIZE_REG_C);
-      end if;  
+      size_reg <= (others => '0');
+      for i in acc_reg_abs'high downto acc_reg_abs'low loop
+        if acc_reg_abs(i) /= '0' then
+          size_reg <= TO_UNSIGNED(i+1,SIZE_REG_C);
+          exit;
+        end if;
+      end loop;
 
-      -- compute Symbol-1 Size
-      -- positive input
-      if acc_reg = TO_SIGNED(1,RAMDATA_W+1) then
-        size_reg <= TO_UNSIGNED(1,SIZE_REG_C);
-      elsif (acc_reg > TO_SIGNED(1,RAMDATA_W+1) and acc_reg < TO_SIGNED(4,RAMDATA_W+1)) then
-        size_reg <= TO_UNSIGNED(2,SIZE_REG_C);
-      elsif (acc_reg > TO_SIGNED(3,RAMDATA_W+1) and acc_reg < TO_SIGNED(8,RAMDATA_W+1)) then
-        size_reg <= TO_UNSIGNED(3,SIZE_REG_C);
-      elsif (acc_reg > TO_SIGNED(7,RAMDATA_W+1) and acc_reg < TO_SIGNED(16,RAMDATA_W+1)) then
-        size_reg <= TO_UNSIGNED(4,SIZE_REG_C); 
-      elsif (acc_reg > TO_SIGNED(15,RAMDATA_W+1) and acc_reg < TO_SIGNED(32,RAMDATA_W+1)) then
-        size_reg <= TO_UNSIGNED(5,SIZE_REG_C);    
-      elsif (acc_reg > TO_SIGNED(31,RAMDATA_W+1) and acc_reg < TO_SIGNED(64,RAMDATA_W+1)) then
-        size_reg <= TO_UNSIGNED(6,SIZE_REG_C);  
-      elsif (acc_reg > TO_SIGNED(63,RAMDATA_W+1) and acc_reg < TO_SIGNED(128,RAMDATA_W+1)) then
-        size_reg <= TO_UNSIGNED(7,SIZE_REG_C);  
-      elsif (acc_reg > TO_SIGNED(127,RAMDATA_W+1) and acc_reg < TO_SIGNED(256,RAMDATA_W+1)) then
-        size_reg <= TO_UNSIGNED(8,SIZE_REG_C);  
-      elsif (acc_reg > TO_SIGNED(255,RAMDATA_W+1) and acc_reg < TO_SIGNED(512,RAMDATA_W+1)) then
-        size_reg <= TO_UNSIGNED(9,SIZE_REG_C);  
-      elsif (acc_reg > TO_SIGNED(511,RAMDATA_W+1) and acc_reg < TO_SIGNED(1024,RAMDATA_W+1)) then
-        size_reg <= TO_UNSIGNED(10,SIZE_REG_C);   
-      elsif (acc_reg > TO_SIGNED(1023,RAMDATA_W+1) and acc_reg < TO_SIGNED(2048,RAMDATA_W+1)) then
-        size_reg <= TO_UNSIGNED(11,SIZE_REG_C);  
-      end if; 
-      
-      -- DC coefficient amplitude=0 case OR EOB
-      if acc_reg = 0 then
-         size_reg <= TO_UNSIGNED(0,SIZE_REG_C);
-      end if;
     end if;
   end process;      
   

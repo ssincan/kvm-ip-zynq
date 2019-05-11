@@ -124,6 +124,7 @@ architecture RTL of CtrlSM is
   signal RSM             : T_SM_SETTINGS;
   signal out_mux_ctrl_s  : std_logic;
   signal out_mux_ctrl_s2 : std_logic;
+  signal img_size_y_m8   : unsigned(img_size_y'range);
   
 -------------------------------------------------------------------------------
 -- Architecture: begin
@@ -216,6 +217,7 @@ begin
       jpeg_ready        <= '0';
       RSM.x_cnt         <= (others => '0');
       RSM.y_cnt         <= (others => '0');
+      img_size_y_m8     <= (others => '0');
       jpeg_busy         <= '0';
       RSM.cmp_idx       <= (others => '0');
       out_mux_ctrl_s    <= '0';
@@ -224,6 +226,7 @@ begin
       out_mux_ctrl      <= '0';
       jfif_start        <= '0';
     elsif CLK'event and CLK = '1' then
+      img_size_y_m8     <= unsigned(img_size_y)-8;
       start(1)          <= '0';
       start1_d          <= start(1);
       jpeg_ready        <= '0';
@@ -283,7 +286,7 @@ begin
         -- VERT
         -------------------------------
         when VERT =>       
-          if RSM.y_cnt < unsigned(img_size_y)-8 then
+          if RSM.y_cnt < img_size_y_m8 then
             RSM.x_cnt <= (others => '0');
             RSM.y_cnt <= RSM.y_cnt + 8;
             main_state <= HORIZ;

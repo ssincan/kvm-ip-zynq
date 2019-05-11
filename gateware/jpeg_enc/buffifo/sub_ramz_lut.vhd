@@ -71,7 +71,7 @@ architecture RTL of SUB_RAMZ_LUT is
 		return RAM; 
 	end function; 
 							 
-  signal mem                    : mem_type := InitRamFromFile("../design/BufFifo/counter_8.txt") ;
+  signal mem                    : mem_type := InitRamFromFile("counter_8.data") ;
   signal read_addr              : STD_LOGIC_VECTOR(RAMADDR_W-1 downto 0);
   
   --attribute ram_style: string;

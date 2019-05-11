@@ -89,9 +89,11 @@ architecture RTL of Huffman is
   signal rle_buf_sel_s     : std_logic;
   signal first_rle_word    : std_logic;
   signal word_reg          : unsigned(C_M-1 downto 0);
+  signal word_reg_VLC      : unsigned(C_M-1 downto 0);
+  signal word_reg_VLI_ext  : unsigned(C_M-1 downto 0);
   signal bit_ptr           : unsigned(4 downto 0);
   signal num_fifo_wrs      : unsigned(1 downto 0);
-  signal VLI_ext           : unsigned(15 downto 0);
+  signal VLI_ext           : unsigned(C_M-1 downto 0);
   signal VLI_ext_size      : unsigned(4 downto 0);
   signal ready_HFW         : std_logic;
   signal fifo_wbyte        : std_logic_vector(7 downto 0);
@@ -101,7 +103,7 @@ architecture RTL of Huffman is
   signal image_area_size   : unsigned(31 downto 0);
   signal block_cnt         : unsigned(27 downto 0);
   signal VLC_size          : unsigned(4 downto 0);
-  signal VLC               : unsigned(15 downto 0);
+  signal VLC               : unsigned(C_M-1 downto 0);
   signal VLC_DC_size       : std_logic_vector(3 downto 0);
   signal VLC_DC            : unsigned(8 downto 0);
   signal VLC_AC_size       : unsigned(4 downto 0);
@@ -111,10 +113,8 @@ architecture RTL of Huffman is
   signal d_val_d2          : std_logic;
   signal d_val_d3          : std_logic;
   signal d_val_d4          : std_logic;
-  signal VLI_size_d        : std_logic_vector(3 downto 0);
-  signal VLI_d             : std_logic_vector(11 downto 0);
   signal VLI_size_d1       : std_logic_vector(3 downto 0);
-  signal VLI_d1            : std_logic_vector(11 downto 0);
+  signal VLI_d1            : unsigned(C_M-1 downto 0);
   signal HFW_running       : std_logic;
   signal runlength_r       : std_logic_vector(3 downto 0);
   signal VLI_size_r        : std_logic_vector(3 downto 0);
@@ -258,22 +258,22 @@ begin
         -- luminance
         if huf_sm_settings.cmp_idx < 2 then
           VLC_size <= unsigned('0' & VLC_DC_size);
-          VLC      <= resize(VLC_DC, VLC'length);
+          VLC      <= shift_left(resize(VLC_DC, VLC'length), C_M-to_integer(unsigned(VLC_DC_size)));
         -- chrominance
         else
           VLC_size <= unsigned('0' & VLC_CR_DC_size);
-          VLC      <= resize(VLC_CR_DC, VLC'length);
+          VLC      <= shift_left(resize(VLC_CR_DC, VLC'length), C_M-to_integer(unsigned(VLC_CR_DC_size)));
         end if;
       -- AC
       else
         -- luminance
         if huf_sm_settings.cmp_idx < 2 then
           VLC_size <= VLC_AC_size;
-          VLC      <= VLC_AC;
+          VLC      <= shift_left(resize(VLC_AC, VLC'length), C_M-to_integer(unsigned(VLC_AC_size)));
         -- chrominance
         else
           VLC_size <= VLC_CR_AC_size;
-          VLC      <= VLC_CR_AC;
+          VLC      <= shift_left(resize(VLC_CR_AC, VLC'length), C_M-to_integer(unsigned(VLC_CR_AC_size)));
         end if;
       end if;
     end if;
@@ -282,40 +282,40 @@ begin
   -------------------------------------------------------------------
   -- Block Counter / Last Block detector
   -------------------------------------------------------------------
-  p_blk_cnt : process(CLK, RST)
+  p_blk_cnt : process(CLK)
   begin
-    if RST = '1' then
-      image_area_size <= (others => '0');
-      last_block      <= '0';
-    elsif CLK'event and CLK = '1' then
+    if CLK'event and CLK = '1' then
       image_area_size <= unsigned(img_size_x)*unsigned(img_size_y);
-      
+
       if sof = '1' then
         block_cnt <= (others => '0');
       elsif start_pb = '1' then
         block_cnt <= block_cnt + 1;
       end if;
-      
+
       if block_cnt = image_area_size(31 downto 5) then
         last_block <= '1';
       else
         last_block <= '0';
       end if;
-      
+
+      if RST = '1' then
+        image_area_size <= (others => '0');
+        last_block      <= '0';
+      end if;
     end if;
   end process;
-  
-  VLI_ext      <= unsigned("0000" & VLI_d1);
+
+  VLI_ext      <= VLI_d1;
   VLI_ext_size <= unsigned('0' & VLI_size_d1);
   
   -------------------------------------------------------------------
   -- delay line
   -------------------------------------------------------------------
   p_vli_dly : process(CLK, RST)
+    variable VLI_d0_v : unsigned(VLC'range);
   begin
     if RST = '1' then
-      VLI_d       <= (others => '0');
-      VLI_size_d  <= (others => '0');
       VLI_d1      <= (others => '0');
       VLI_size_d1 <= (others => '0');
       d_val_d1    <= '0';
@@ -323,12 +323,16 @@ begin
       d_val_d3    <= '0';
       d_val_d4    <= '0';
     elsif CLK'event and CLK = '1' then
-      VLI_d1      <= VLI_r;
+      VLI_d0_v := resize(unsigned(VLI_r), VLI_d0_v'length);
+      for i in VLI_d0_v'range loop
+        if (i >= 2**VLI_size_r'length) or (i >= unsigned(VLI_size_r)) then
+          VLI_d0_v(i) := '0';
+        end if;
+      end loop;
+      VLI_d0_v    := shift_left(VLI_d0_v, C_M-to_integer(unsigned(VLI_size_r)));
+      VLI_d1      <= VLI_d0_v;
       VLI_size_d1 <= VLI_size_r;
-      
-      VLI_d       <= VLI_d1;
-      VLI_size_d  <= VLI_size_d1;
-      
+          
       d_val_d1   <= d_val;
       d_val_d2   <= d_val_d1;
       d_val_d3   <= d_val_d2;
@@ -399,9 +403,14 @@ begin
   -- divide by 8
   num_fifo_wrs <= bit_ptr(4 downto 3);
   
+  -- align VLC/VLI_ext with word_reg
+  word_reg_VLC     <= shift_right(resize(VLC, word_reg'length), to_integer(bit_ptr));
+  word_reg_VLI_ext <= shift_right(resize(VLI_ext, word_reg'length), to_integer(bit_ptr));
+
   -------------------------------------------------------------------
   -- Variable Length Processor FSM
   -------------------------------------------------------------------
+
   p_vlp : process(CLK, RST)
   begin
     if RST = '1' then
@@ -428,13 +437,10 @@ begin
           -- data valid DC or data valid AC
           if (d_val_d1 = '1' and first_rle_word = '1') or 
              (d_val = '1' and first_rle_word = '0') then
-            for i in 0 to C_M-1 loop
-              if i < to_integer(VLC_size) then
-                word_reg(C_M-1-to_integer(bit_ptr)-i) <= VLC(to_integer(VLC_size)-1-i);
-              end if;
-            end loop;
+
+            word_reg <= word_reg or word_reg_VLC;
             bit_ptr <= bit_ptr + resize(VLC_size,bit_ptr'length);
-            
+
             -- HandleFifoWrites
             HFW_running  <= '1';
           -- HandleFifoWrites completed
@@ -452,15 +458,9 @@ begin
         
         when RUN_VLI =>
           if HFW_running = '0' then
-            
-            for i in 0 to C_M-1 loop
-              if i < to_integer(VLI_ext_size) then
-                word_reg(C_M-1-to_integer(bit_ptr)-i)
-                  <= VLI_ext(to_integer(VLI_ext_size)-1-i);
-              end if;
-            end loop;
-              
-            bit_ptr <= bit_ptr + resize(VLI_ext_size,bit_ptr'length);
+
+            word_reg <= word_reg or word_reg_VLI_ext;
+            bit_ptr  <= bit_ptr + resize(VLI_ext_size,bit_ptr'length);
             
             -- HandleFifoWrites
             HFW_running <= '1';
