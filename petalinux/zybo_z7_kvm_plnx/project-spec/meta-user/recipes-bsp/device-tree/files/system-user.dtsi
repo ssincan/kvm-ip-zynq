@@ -1,0 +1,46 @@
+/include/ "system-conf.dtsi"
+/ {
+
+    chosen {
+        bootargs = "console=ttyPS0,115200 earlyprintk root=/dev/mmcblk0p2 rw rootwait uio_pdrv_genirq.of_id=generic-uio";
+        stdout-path = "serial0:115200n8";
+    };
+    
+    reserved-memory {
+        #address-cells = <1>;
+        #size-cells = <1>;
+        ranges;
+        reserved: buffer@0x38000000 {
+            no-map;
+            reg = <0x38000000 0x08000000>;
+       };
+    };
+
+    amba_pl: amba_pl {
+        #address-cells = <1>;
+        #size-cells = <1>;
+        compatible = "simple-bus";
+        ranges;
+        m_axi_gp0: m_axi_gp@40000000 {
+            compatible = "generic-uio";
+            reg = <0x40000000 0x40000000>;
+        };
+        m_axi_gp1: m_axi_gp@80000000 {
+            compatible = "generic-uio";
+            reg = <0x80000000 0x40000000>;
+        };
+    };
+
+    usb_phy0: phy0 {
+        #phy-cells = <0>;
+        compatible = "usb-nop-xceiv";
+        reset-gpios = <&gpio0 46 1>;
+    };
+
+};
+
+&usb0 {
+    status = "okay";
+    dr_mode = "peripheral";
+    usb-phy = <&usb_phy0>;
+};

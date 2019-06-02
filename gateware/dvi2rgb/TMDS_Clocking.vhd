@@ -65,8 +65,10 @@ entity TMDS_Clocking is
    Port (
       TMDS_Clk_p : in std_logic;
       TMDS_Clk_n : in std_logic;
+      TMDS_Clk   : out std_logic;
       RefClk : in std_logic; -- 200MHz reference clock for IDELAY primitives; independent of DVI_Clk!
       aRst : in std_logic; --asynchronous reset; must be reset when RefClk is not within spec
+      PixelMMCMReset : in std_logic;
       SerialClk : out std_logic;
       PixelClk : out std_logic;
       aLocked : out std_logic;
@@ -84,11 +86,11 @@ constant kDlyRstDelay : natural := 32;
 signal aDlyLckd, rDlyRst, rBUFR_Rst, rLockLostRst : std_logic;
 signal rDlyRstCnt : natural range 0 to kDlyRstDelay - 1 := kDlyRstDelay - 1;
 
-signal clkfbout_hdmi_clk, CLK_IN_hdmi_clk, CLK_OUT_1x_hdmi_clk, CLK_OUT_5x_hdmi_clk : std_logic;
+signal clkfbout_hdmi_clk, CLK_IN_hdmi_clk, CLK_OUT_5x_hdmi_clk : std_logic;
 signal clkout1b_unused, clkout2_unused, clkout2b_unused, clkout3_unused, clkout3b_unused, clkout4_unused, clkout5_unused, clkout6_unused,
 drdy_unused, psdone_unused, clkfbstopped_unused, clkinstopped_unused, clkfboutb_unused, clkout0b_unused, clkout1_unused : std_logic;
 signal do_unused : std_logic_vector(15 downto 0);
-signal LOCKED_int, rRdyRst : std_logic;
+signal LOCKED_int, rRdyRst, PixelMMCMResetSync : std_logic;
 signal aMMCM_Locked, rMMCM_Locked_ms, rMMCM_Locked, rMMCM_LckdFallingFlag, rMMCM_LckdRisingFlag : std_logic;
 signal rMMCM_Reset_q : std_logic_vector(1 downto 0);
 signal rMMCM_Locked_q : std_logic_vector(1 downto 0);
@@ -106,6 +108,14 @@ LockLostReset: entity work.ResetBridge
       aRst => aRst,
       OutClk => RefClk,
       oRst => rLockLostRst);
+
+MMCMForceReset: entity work.ResetBridge
+   generic map (
+      kPolarity => '1')
+   port map (
+      aRst => PixelMMCMReset,
+      OutClk => RefClk,
+      oRst => PixelMMCMResetSync);
 
 --IDELAYCTRL must be reset after configuration or refclk lost for 52ns(K7), 72ns(A7) at least
 ResetIDELAYCTRL: process(rLockLostRst, RefClk)
@@ -146,7 +156,19 @@ InputBuffer: IBUFDS
       O => CLK_IN_hdmi_clk,
       I => TMDS_Clk_p,
       IB => TMDS_Clk_n);
-      
+
+TMDSBuffer: BUFR
+   generic map (
+      BUFR_DIVIDE => "BYPASS",   -- Values: "BYPASS, 1, 2, 3, 4, 5, 6, 7, 8" 
+      SIM_DEVICE => "7SERIES"  -- Must be set to "7SERIES" 
+   )
+   port map (
+      O => TMDS_Clk,     -- 1-bit output: Clock output port
+      CE => '1',   -- 1-bit input: Active high, clock enable (Divided modes only)
+      CLR => '0', -- 1-bit input: Active high, asynchronous clear (Divided modes only)        
+      I => CLK_IN_hdmi_clk      -- 1-bit input: Clock buffer input driven by an IBUF, MMCM or local interconnect
+   );     
+
 -- The TMDS Clk channel carries a character-rate frequency reference
 -- In a single Clk period a whole character (10 bits) is transmitted
 -- on each data channel. For deserialization of data channel a faster,
@@ -191,6 +213,10 @@ DVI_ClkGenerator: MMCME2_ADV
       CLKOUT0_PHASE        => 0.000,
       CLKOUT0_DUTY_CYCLE   => 0.500,
       CLKOUT0_USE_FINE_PS  => FALSE,
+      CLKOUT1_DIVIDE       => kClkRange * 5,
+      CLKOUT1_PHASE        => 0.000,
+      CLKOUT1_DUTY_CYCLE   => 0.500,
+      CLKOUT1_USE_FINE_PS  => FALSE,
       CLKIN1_PERIOD        => real(kClkRange) * 6.0,
       REF_JITTER1          => 0.010)
    port map
@@ -241,6 +267,7 @@ SerialClkBuffer: BUFIO
       O => SerialClk, -- 1-bit output: Clock output (connect to I/O clock loads).
       I => CLK_OUT_5x_hdmi_clk  -- 1-bit input: Clock input (connect to an IBUF or BUFMR).
    );
+
 -- 1x slow parallel clock
 PixelClkBuffer: BUFR
    generic map (
@@ -252,7 +279,8 @@ PixelClkBuffer: BUFR
       CE => '1',   -- 1-bit input: Active high, clock enable (Divided modes only)
       CLR => rBUFR_Rst, -- 1-bit input: Active high, asynchronous clear (Divided modes only)        
       I => CLK_OUT_5x_hdmi_clk      -- 1-bit input: Clock buffer input driven by an IBUF, MMCM or local interconnect
-   );     
+   );  
+
 rBUFR_Rst <= rMMCM_LckdRisingFlag; --pulse CLR on BUFR once the clock returns
 
 MMCM_Reset: process(rLockLostRst, RefClk)
@@ -260,10 +288,10 @@ begin
    if (rLockLostRst = '1') then
       rMMCM_Reset_q <= (others => '1'); -- MMCM_RSTMINPULSE Minimum Reset Pulse Width 5.00ns = two RefClk periods min
    elsif Rising_Edge(RefClk) then
-      if (rMMCM_LckdFallingFlag = '1') then
-          rMMCM_Reset_q <= (others => '1');
+      if (rMMCM_LckdFallingFlag = '1') or (PixelMMCMResetSync = '1') then
+         rMMCM_Reset_q <= (others => '1');
       else
-          rMMCM_Reset_q <= '0' & rMMCM_Reset_q(rMMCM_Reset_q'high downto 1);
+         rMMCM_Reset_q <= '0' & rMMCM_Reset_q(rMMCM_Reset_q'high downto 1);
       end if;
    end if; 
 end process MMCM_Reset;

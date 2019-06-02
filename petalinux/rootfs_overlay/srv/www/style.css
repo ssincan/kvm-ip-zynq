@@ -1,0 +1,9 @@
+html, body {
+	margin: 0;
+	padding: 0;
+    border: 0;
+}
+
+img {padding:none;margin:none;vertical-align:bottom;}
+
+div {white-space:nowrap;}

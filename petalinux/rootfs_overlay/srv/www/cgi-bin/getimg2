@@ -1,0 +1,7 @@
+#!/bin/sh
+poke 0x40000020 0
+img_addr=`peek 0x4000002C`
+echo "Content-type: image/jpeg"
+echo ""
+memdump $(($img_addr+0x80)) `peek $img_addr`
+poke 0x40000024 0

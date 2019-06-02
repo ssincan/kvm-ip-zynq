@@ -65,7 +65,7 @@ entity dvi2rgb is
    Generic (
       kEmulateDDC : boolean := true; --will emulate a DDC EEPROM with basic EDID, if set to yes 
       kRstActiveHigh : boolean := true; --true, if active-high; false, if active-low
-      kAddBUFG : boolean := true; --true, if PixelClk should be re-buffered with BUFG 
+      kAddBUFG : boolean := true; --true, if PixelClk should be re-buffered with BUFG
       kClkRange : natural := 2;  -- MULT_F = kClkRange*5 (choose >=120MHz=1, >=60MHz=2, >=40MHz=3)
       kEdidFileName : string := "dgl_720p_cea.data";  -- Select EDID file to use
       kDebug : boolean := true;
@@ -83,6 +83,7 @@ entity dvi2rgb is
       RefClk : in std_logic; --200 MHz reference clock for IDELAYCTRL, reset, lock monitoring etc.
       aRst : in std_logic; --asynchronous reset; must be reset when RefClk is not within spec
       aRst_n : in std_logic; --asynchronous reset; must be reset when RefClk is not within spec
+      PixelMMCMReset : in std_logic := '0'; -- advanced use only; force MMCM reset
       
       -- Video out
       vid_pData : out std_logic_vector(23 downto 0);
@@ -91,7 +92,7 @@ entity dvi2rgb is
       vid_pVSync : out std_logic;
       
       PixelClk : out std_logic; --pixel-clock recovered from the DVI interface
-      
+      TMDS_Clk : out std_logic; -- advanced use only; TMDS_Clk
       SerialClk : out std_logic; -- advanced use only; 5x PixelClk
       aPixelClkLckd : out std_logic; -- advanced use only; PixelClk and SerialClk stable
       
@@ -185,8 +186,11 @@ TMDS_ClockingX: entity work.TMDS_Clocking
    port map (
       aRst       => aRst_int, 
       RefClk     => RefClk,
+      PixelMMCMReset => PixelMMCMReset,
+
       TMDS_Clk_p => TMDS_Clk_p,      
       TMDS_Clk_n => TMDS_Clk_n,
+      TMDS_Clk => TMDS_Clk,
 
       aLocked    => aLocked,  
       PixelClk   => PixelClk_int, -- slow parallel clock
@@ -287,7 +291,7 @@ DontGenerateBUFG: if not kAddBUFG generate
    vid_pVSync <= pVSync;
    PixelClk <= PixelClk_int;
 end generate DontGenerateBUFG;
-                 
+
 ----------------------------------------------------------------------------------
 -- Optional DDC EEPROM Display Data Channel - Bi-directional (DDC2B)
 -- The EDID will be loaded from the file specified below in kInitFileName.
