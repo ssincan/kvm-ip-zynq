@@ -16,7 +16,7 @@ static const uint64_t kBaseUnfreezeAddr = kBaseAddr + 0x4;
 static const uint64_t kImageOffset = 0x10;
 static const uint32_t kPageSize = sysconf(_SC_PAGESIZE);
 static const uint32_t kPageMask = ~(kPageSize - 1);
-static const uint64_t kMaxBuffSize = 4096ull * 1024ull * 1024ull;
+static const uint64_t kMaxBuffSize = 4ull * 1024ull * 1024ull;
 
 inline uint64_t getFreezeAddr(int imgNr)
 {
@@ -156,7 +156,6 @@ int getImageNr()
 
     //std::string queryString { "ch=1&t=155000000&ext=.jpeg" };
     if (queryString != "") {
-        static const std::string startString { "ch= "};
         auto start = queryString.find("=") + 1;
         auto end = queryString.find("&");
 
