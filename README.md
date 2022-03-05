@@ -2,7 +2,7 @@
 
 A KVM over IP Gateway, enabling transparent remote access over an IP network, implemented on the Xilinx Zynq-7020 SoC (Zybo Z7-20 development board).
 
-[Demo Video](https://www.youtube.com/watch?v=QUVDMDh9kc4)
+[2 Minute Demo Video](https://www.youtube.com/watch?v=QUVDMDh9kc4)
 
 ![Usage](/doc/usage.png)
 
